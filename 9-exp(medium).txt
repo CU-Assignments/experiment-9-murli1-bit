@@ -1,0 +1,220 @@
+//Creating hibernate file
+<!DOCTYPE hibernate-configuration PUBLIC "-//Hibernate/Hibernate Configuration DTD 3.0//EN"
+"http://hibernate.sourceforge.net/hibernate-configuration-3.0.dtd">
+
+<hibernate-configuration>
+    <session-factory>
+        <!-- Database Connection Settings -->
+        <property name="hibernate.connection.driver_class">com.mysql.cj.jdbc.Driver</property>
+        <property name="hibernate.connection.url">jdbc:mysql://localhost:3306/studentdb</property>
+        <property name="hibernate.connection.username">root</property>
+        <property name="hibernate.connection.password">password</property>
+
+        <!-- Hibernate Settings -->
+        <property name="hibernate.dialect">org.hibernate.dialect.MySQL8Dialect</property>
+        <property name="hibernate.hbm2ddl.auto">update</property>
+        <property name="show_sql">true</property>
+    </session-factory>
+</hibernate-configuration>
+
+
+//create student class
+import javax.persistence.*;
+
+@Entity
+@Table(name = "students")
+public class Student {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+    
+    @Column(name = "name")
+    private String name;
+    
+    @Column(name = "age")
+    private int age;
+
+    // Constructors
+    public Student() {}
+    public Student(String name, int age) {
+        this.name = name;
+        this.age = age;
+    }
+
+    // Getters and Setters
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public int getAge() { return age; }
+    public void setAge(int age) { this.age = age; }
+
+    @Override
+    public String toString() {
+        return "Student [ID=" + id + ", Name=" + name + ", Age=" + age + "]";
+    }
+}
+
+
+//Create HibernateUtil for SessionFactory
+import org.hibernate.SessionFactory;
+import org.hibernate.cfg.Configuration;
+
+public class HibernateUtil {
+    private static final SessionFactory sessionFactory = buildSessionFactory();
+
+    private static SessionFactory buildSessionFactory() {
+        try {
+            return new Configuration().configure("hibernate.cfg.xml").addAnnotatedClass(Student.class).buildSessionFactory();
+        } catch (Throwable ex) {
+            throw new ExceptionInInitializerError(ex);
+        }
+    }
+
+    public static SessionFactory getSessionFactory() {
+        return sessionFactory;
+    }
+}
+
+
+//implementing CRUD operations
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+
+public class StudentDAO {
+
+    // Create Student
+    public void saveStudent(Student student) {
+        Transaction transaction = null;
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            session.save(student);
+            transaction.commit();
+        } catch (Exception e) {
+            if (transaction != null) transaction.rollback();
+            e.printStackTrace();
+        }
+    }
+
+    // Read Student
+    public Student getStudent(int id) {
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            return session.get(Student.class, id);
+        }
+    }
+
+    // Update Student
+    public void updateStudent(Student student) {
+        Transaction transaction = null;
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            session.update(student);
+            transaction.commit();
+        } catch (Exception e) {
+            if (transaction != null) transaction.rollback();
+            e.printStackTrace();
+        }
+    }
+
+    // Delete Student
+    public void deleteStudent(int id) {
+        Transaction transaction = null;
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            transaction = session.beginTransaction();
+            Student student = session.get(Student.class, id);
+            if (student != null) session.delete(student);
+            transaction.commit();
+        } catch (Exception e) {
+            if (transaction != null) transaction.rollback();
+            e.printStackTrace();
+        }
+    }
+}
+
+//Testing CRUD operations
+public class MainApp {
+    public static void main(String[] args) {
+        StudentDAO studentDAO = new StudentDAO();
+
+        // Create
+        Student student1 = new Student("Alice", 22);
+        studentDAO.saveStudent(student1);
+
+        // Read
+        Student studentFromDB = studentDAO.getStudent(1);
+        System.out.println("Retrieved: " + studentFromDB);
+
+        // Update
+        studentFromDB.setAge(23);
+        studentDAO.updateStudent(studentFromDB);
+
+        // Delete
+        studentDAO.deleteStudent(1);
+    }
+}
+
+
+//Accounts.java
+import javax.persistence.*;
+
+@Entity
+@Table(name = "accounts")
+public class Account {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+    
+    private String accountHolder;
+    private double balance;
+
+    // Getters and Setters
+}
+
+
+//Transactions.java
+import javax.persistence.*;
+import java.util.Date;
+
+@Entity
+@Table(name = "transactions")
+public class Transaction {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+    
+    private int fromAccount;
+    private int toAccount;
+    private double amount;
+    private Date transactionDate;
+    
+    // Getters and Setters
+}
+
+
+//service layer including transactions
+import org.springframework.transaction.annotation.Transactional;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+
+public class BankService {
+    private SessionFactory sessionFactory;
+
+    @Transactional
+    public void transferMoney(int fromAccount, int toAccount, double amount) {
+        Session session = sessionFactory.getCurrentSession();
+        
+        Account sender = session.get(Account.class, fromAccount);
+        Account receiver = session.get(Account.class, toAccount);
+        
+        if (sender.getBalance() >= amount) {
+            sender.setBalance(sender.getBalance() - amount);
+            receiver.setBalance(receiver.getBalance() + amount);
+            session.save(new Transaction(fromAccount, toAccount, amount, new Date()));
+        } else {
+            throw new RuntimeException("Insufficient funds!");
+        }
+    }
+}
